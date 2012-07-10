@@ -1,0 +1,4 @@
+bin/tools/rdf3xload/rdf3xload.o: tools/rdf3xload/rdf3xload.cpp  include/cts/parser/TurtleParser.hpp include/infra/Config.hpp include/infra/osdep/MemoryMappedFile.hpp include/infra/util/Type.hpp include/rts/buffer/BufferReference.hpp include/rts/database/Database.hpp include/rts/database/DatabaseBuilder.hpp tools/rdf3xload/Sorter.hpp tools/rdf3xload/StringLookup.hpp tools/rdf3xload/TempFile.hpp
+
+bin/tools/rdf3xload/rdf3xload.d: tools/rdf3xload/rdf3xload.cpp $(wildcard  include/cts/parser/TurtleParser.hpp include/infra/Config.hpp include/infra/osdep/MemoryMappedFile.hpp include/infra/util/Type.hpp include/rts/buffer/BufferReference.hpp include/rts/database/Database.hpp include/rts/database/DatabaseBuilder.hpp tools/rdf3xload/Sorter.hpp tools/rdf3xload/StringLookup.hpp tools/rdf3xload/TempFile.hpp)
+
