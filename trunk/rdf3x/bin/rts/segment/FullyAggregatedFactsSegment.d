@@ -1,0 +1,4 @@
+bin/rts/segment/FullyAggregatedFactsSegment.o: rts/segment/FullyAggregatedFactsSegment.cpp  include/infra/Config.hpp include/infra/util/Type.hpp include/rts/buffer/BufferReference.hpp include/rts/database/Database.hpp include/rts/database/DatabaseBuilder.hpp include/rts/segment/BTree.hpp include/rts/segment/FullyAggregatedFactsSegment.hpp include/rts/segment/Segment.hpp include/rts/transaction/LogAction.hpp
+
+bin/rts/segment/FullyAggregatedFactsSegment.d: rts/segment/FullyAggregatedFactsSegment.cpp $(wildcard  include/infra/Config.hpp include/infra/util/Type.hpp include/rts/buffer/BufferReference.hpp include/rts/database/Database.hpp include/rts/database/DatabaseBuilder.hpp include/rts/segment/BTree.hpp include/rts/segment/FullyAggregatedFactsSegment.hpp include/rts/segment/Segment.hpp include/rts/transaction/LogAction.hpp)
+
