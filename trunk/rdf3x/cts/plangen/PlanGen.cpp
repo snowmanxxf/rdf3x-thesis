@@ -299,6 +299,10 @@ static bool isUnused(const QueryGraph::SubQuery& query,const QueryGraph::Node& n
       for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          if (!isUnused(*iter2,node,val))
             return false;
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.substractions.begin(),limit=query.substractions.end();iter!=limit;++iter)
+      for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         if (!isUnused(*iter2,node,val))
+            return false;
    return true;
 }
 //---------------------------------------------------------------------------
@@ -447,6 +451,11 @@ static void collectVariables(const QueryGraph::SubQuery& query,set<unsigned>& va
          for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
             if (except!=(&(*iter2)))
                collectVariables(*iter2,vars,except);
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.substractions.begin(),limit=query.substractions.end();iter!=limit;++iter)
+      if (except!=(&(*iter)))
+         for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+            if (except!=(&(*iter2)))
+               collectVariables(*iter2,vars,except);
 }
 //---------------------------------------------------------------------------
 static void collectVariables(const QueryGraph& query,set<unsigned>& vars,const void* except)
@@ -465,6 +474,63 @@ static Plan* findOrdering(Plan* root,unsigned ordering)
       if (root->ordering==ordering)
          return root;
    return 0;
+}
+//---------------------------------------------------------------------------
+PlanGen::Problem* PlanGen::buildSubstraction(const vector<QueryGraph::SubQuery>& query,unsigned id)
+   // Generate a substraction part
+{
+   // Solve the subproblems
+   vector<Plan*> parts,solutions;
+   for (unsigned index=0;index<query.size();index++) {
+      Plan* p=translate(query[index]),*bp=p;
+      for (Plan* iter=p;iter;iter=iter->next)
+         if (iter->costs<bp->costs)
+            bp=iter;
+      parts.push_back(bp);
+      solutions.push_back(p);
+   }
+
+   // Compute statistics
+   Plan::card_t card=0;
+   Plan::cost_t costs=0;
+   for (vector<Plan*>::const_iterator iter=parts.begin(),limit=parts.end();iter!=limit;++iter) {
+      card+=(*iter)->cardinality;
+      costs+=(*iter)->costs;
+   }
+
+   // Create a new problem instance
+   Problem* result=problems.alloc();
+   result->next=0;
+   result->plans=0;
+   result->relations=BitSet();
+   result->relations.set(id);
+
+   // And create a substraction operator
+   Plan* last=plans.alloc();
+   last->op=Plan::Substraction;
+   last->opArg=0;
+   last->left=parts[0];
+   last->right=parts[1];
+   last->cardinality=card;
+   last->costs=costs;
+   last->ordering=~0u;
+   last->next=0;
+   result->plans=last;
+   for (unsigned index=2;index<parts.size();index++) {
+      Plan* nextPlan=plans.alloc();
+      nextPlan->left=last->right;
+      last->right=nextPlan;
+      last=nextPlan;
+      last->op=Plan::Substraction;
+      last->opArg=0;
+      last->right=parts[index];
+      last->cardinality=card;
+      last->costs=costs;
+      last->ordering=~0u;
+      last->next=0;
+   }
+
+   return result;
 }
 //---------------------------------------------------------------------------
 PlanGen::Problem* PlanGen::buildUnion(const vector<QueryGraph::SubQuery>& query,unsigned id)
@@ -618,35 +684,46 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
 Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    // Translate a query into an operator tree
 {
-   bool singletonNeeded=(!(query.nodes.size()+query.optional.size()+query.unions.size()))&&query.tableFunctions.size();
+   bool singletonNeeded=(!(query.nodes.size()+query.optional.size()+query.unions.size()+query.substractions.size()))&&query.tableFunctions.size();
 
    // Check if we could handle the query
-   if ((query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded)>BitSet::maxWidth)
+   if ((query.nodes.size()+query.optional.size()+query.unions.size()+query.substractions.size()+query.tableFunctions.size()+singletonNeeded)>BitSet::maxWidth)
       return 0;
 
    // Seed the DP table with scans
    vector<Problem*> dpTable;
-   dpTable.resize(query.nodes.size()+query.optional.size()+query.unions.size()+query.tableFunctions.size()+singletonNeeded);
+   dpTable.resize(query.nodes.size()+query.optional.size()+query.unions.size()+query.substractions.size()+query.tableFunctions.size()+singletonNeeded);
    Problem* last=0;
    unsigned id=0;
    for (vector<QueryGraph::Node>::const_iterator iter=query.nodes.begin(),limit=query.nodes.end();iter!=limit;++iter,++id) {
       Problem* p=buildScan(query,*iter,id);
       if (last)
-         last->next=p; else
+         last->next=p;
+      else
          dpTable[0]=p;
       last=p;
    }
    for (vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter,++id) {
       Problem* p=buildOptional(*iter,id);
       if (last)
-         last->next=p; else
+         last->next=p;
+      else
          dpTable[0]=p;
       last=p;
    }
    for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter,++id) {
       Problem* p=buildUnion(*iter,id);
       if (last)
-         last->next=p; else
+         last->next=p;
+      else
+         dpTable[0]=p;
+      last=p;
+   }
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.substractions.begin(),limit=query.substractions.end();iter!=limit;++iter,++id) {
+      Problem* p=buildSubstractions(*iter,id);
+      if (last)
+         last->next=p;
+      else
          dpTable[0]=p;
       last=p;
    }
@@ -654,7 +731,8 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
    for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter,++id) {
       Problem* p=buildTableFunction(*iter,id);
       if (last)
-         last->next=p; else
+         last->next=p;
+      else
          dpTable[0]=p;
       last=p;
    }
@@ -756,7 +834,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                            p->opArg=0;
                            p->left=leftPlan;
                            p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::TableFunction*>((*iter3).tableFunction));
-			   p->next=0;
+                           p->next=0;
                            p->cardinality=leftPlan->cardinality;
                            p->costs=leftPlan->costs+Costs::tableFunction(leftPlan->cardinality);
                            p->ordering=leftPlan->ordering;
@@ -806,7 +884,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-			p->next=0;
+                        p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(leftPlan->cardinality,rightPlan->cardinality);
                         p->ordering=~0u;
@@ -817,7 +895,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=rightPlan;
                         p->right=leftPlan;
-			p->next=0;
+                        p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality*selectivity)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+Costs::hashJoin(rightPlan->cardinality,leftPlan->cardinality);
                         p->ordering=~0u;
@@ -829,7 +907,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
                         p->opArg=0;
                         p->left=leftPlan;
                         p->right=rightPlan;
-			p->next=0;
+                        p->next=0;
                         if ((p->cardinality=leftPlan->cardinality*rightPlan->cardinality)<1) p->cardinality=1;
                         p->costs=leftPlan->costs+rightPlan->costs+leftPlan->cardinality*rightPlan->costs;
                         p->ordering=leftPlan->ordering;
@@ -858,7 +936,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
          p->opArg=0;
          p->left=plan;
          p->right=reinterpret_cast<Plan*>(const_cast<QueryGraph::Filter*>(&(*iter)));
-	 p->next=0;
+         p->next=0;
          p->cardinality=plan->cardinality; // XXX real computation
          p->costs=plan->costs;
          p->ordering=plan->ordering;
