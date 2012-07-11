@@ -18,6 +18,7 @@
 #include "rts/operator/Sort.hpp"
 #include "rts/operator/TableFunction.hpp"
 #include "rts/operator/Union.hpp"
+#include "rts/operator/Substraction.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/DifferentialIndex.hpp"
 #include <cstdlib>
@@ -279,6 +280,40 @@ static Operator* translateMergeJoin(Runtime& runtime,const map<unsigned,Register
 
    // Build the operator
    Operator* result=new MergeJoin(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,plan->cardinality);
+
+   // And apply additional selections if necessary
+   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
+
+   return result;
+}
+//---------------------------------------------------------------------------
+static Operator* translateSubstraction(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate a hash join into an operator tree
+{
+   // Get the join variables (if any)
+   set<unsigned> joinVariables,newProjection=projection;
+   getJoinVariables(context,joinVariables,plan->left,plan->right);
+   newProjection.insert(joinVariables.begin(),joinVariables.end());
+   assert(!joinVariables.empty());
+   unsigned joinOn=*(joinVariables.begin());
+
+   // Build the input trees
+   map<unsigned,Register*> leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
+   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
+   mergeBindings(projection,bindings,leftBindings,rightBindings);
+
+   // Prepare the tails
+   vector<Register*> leftTail,rightTail;
+   //for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+   //   if ((*iter).first!=joinOn)
+   //      leftTail.push_back((*iter).second);
+   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+      if ((*iter).first!=joinOn)
+         rightTail.push_back((*iter).second);
+
+   // Build the operator
+   Operator* result=new Substraction(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
 
    // And apply additional selections if necessary
    result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
@@ -603,6 +638,7 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::NestedLoopJoin: result=translateNestedLoopJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::MergeJoin: result=translateMergeJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::Substraction: result=translateSubstraction(runtime,context,projection,bindings,registers,plan); break;
       case Plan::HashGroupify: result=translateHashGroupify(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Filter: result=translateFilter(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan); break;

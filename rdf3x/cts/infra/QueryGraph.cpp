@@ -158,7 +158,7 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
    // Construct the edges for a specfic subquery
 {
    // Collect all variable bindings
-   vector<set<unsigned> > patternBindings,optionalBindings,unionBindings;
+   vector<set<unsigned> > patternBindings,optionalBindings,unionBindings,substractionBindings;
    patternBindings.resize(subQuery.nodes.size());
    for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
       const QueryGraph::Node& n=subQuery.nodes[index];
@@ -186,10 +186,17 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
          constructEdges(*iter,unionBindings[index]);
       bindings.insert(unionBindings[index].begin(),unionBindings[index].end());
    }
+   substractionBindings.resize(subQuery.substractions.size());
+   for (unsigned index=0,limit=substractionBindings.size();index<limit;++index) {
+      for (vector<QueryGraph::SubQuery>::iterator iter=subQuery.substractions[index].begin(),limit=subQuery.substractions[index].end();iter!=limit;++iter)
+         constructEdges(*iter,substractionBindings[index]);
+      bindings.insert(substractionBindings[index].begin(),substractionBindings[index].end());
+   }
+
 
    // Derive all edges
    subQuery.edges.clear();
-   unsigned optionalOfs=patternBindings.size(),unionOfs=optionalOfs+optionalBindings.size();
+   unsigned optionalOfs=patternBindings.size(),unionOfs=optionalOfs+optionalBindings.size(),substractionOfs=unionOfs+unionBindings.size();
    vector<unsigned> common;
    for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
@@ -201,6 +208,9 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
       for (unsigned index2=0,limit2=unionBindings.size();index2<limit2;index2++)
          if (intersects(patternBindings[index],unionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(index,unionOfs+index2,common));
+      for (unsigned index2=0,limit2=substractionBindings.size();index2<limit2;index2++)
+         if (intersects(patternBindings[index],substractionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(index,substractionOfs+index2,common));
    }
    for (unsigned index=0,limit=optionalBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
@@ -209,12 +219,22 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
       for (unsigned index2=0,limit2=unionBindings.size();index2<limit2;index2++)
          if (intersects(optionalBindings[index],unionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(optionalOfs+index,unionOfs+index2,common));
+      for (unsigned index2=0,limit2=substractionBindings.size();index2<limit2;index2++)
+         if (intersects(optionalBindings[index],substractionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(optionalOfs+index,substractionOfs+index2,common));
    }
    for (unsigned index=0,limit=unionBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
          if (intersects(unionBindings[index],unionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(unionOfs+index,unionOfs+index2,common));
+      for (unsigned index2=0,limit2=substractionBindings.size();index2<limit2;index2++)
+         if (intersects(unionBindings[index],substractionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(unionOfs+index,substractionOfs+index2,common));
    }
+   for (unsigned index=0,limit=substractionBindings.size();index<limit;++index) {
+      for (unsigned index2=index+1;index2<limit;index2++)
+         if (intersects(substractionBindings[index],substractionBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(substractionOfs+index,substractionOfs+index2,common));
 }
 //---------------------------------------------------------------------------
 void QueryGraph::constructEdges()
