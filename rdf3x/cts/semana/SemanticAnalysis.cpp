@@ -361,6 +361,22 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
          return false;
       output.unions.push_back(unionParts);
    }
+   // Encode all substraction parts
+   for (std::vector<std::vector<SPARQLParser::PatternGroup> >::const_iterator iter=group.substractions.begin(),limit=group.substractions.end();iter!=limit;++iter) {
+      std::vector<QueryGraph::SubQuery> substractionParts;
+      for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2) {
+         QueryGraph::SubQuery subQuery;
+         if (!transformSubquery(dict,diffIndex,*iter2,subQuery)) {
+            // Known to produce an empty result, skip it
+            continue;
+         }
+         substractionParts.push_back(subQuery);
+      }
+      // Empty union?
+      if (unionParts.empty())
+         return false;
+      output.substractions.push_back(substractionParts);
+   }
 
    return true;
 }
