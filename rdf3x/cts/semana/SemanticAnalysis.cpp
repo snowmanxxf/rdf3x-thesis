@@ -130,6 +130,10 @@ static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
       for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          if (binds(*iter2,id))
             return true;
+   for (std::vector<std::vector<SPARQLParser::PatternGroup> >::const_iterator iter=group.substractions.begin(),limit=group.substractions.end();iter!=limit;++iter)
+      for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         if (binds(*iter2,id))
+            return true;
    return false;
 }
 //---------------------------------------------------------------------------
@@ -372,8 +376,8 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
          }
          substractionParts.push_back(subQuery);
       }
-      // Empty union?
-      if (unionParts.empty())
+      // Empty substraction?
+      if (substractionParts.empty())
          return false;
       output.substractions.push_back(substractionParts);
    }
