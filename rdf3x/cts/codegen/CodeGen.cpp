@@ -150,6 +150,7 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
       case Plan::NestedLoopJoin:
       case Plan::MergeJoin:
       case Plan::HashJoin:
+      case Plan::Substraction:
       case Plan::Union:
       case Plan::MergeUnion:
          collectVariables(context,variables,plan->left);
@@ -305,9 +306,9 @@ static Operator* translateSubstraction(Runtime& runtime,const map<unsigned,Regis
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
-   //for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
-   //   if ((*iter).first!=joinOn)
-   //      leftTail.push_back((*iter).second);
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+      if ((*iter).first!=joinOn)
+         leftTail.push_back((*iter).second);
    for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
       if ((*iter).first!=joinOn)
          rightTail.push_back((*iter).second);
@@ -666,6 +667,9 @@ static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registe
    for (vector<QueryGraph::SubQuery>::const_iterator iter=query.optional.begin(),limit=query.optional.end();iter!=limit;++iter)
       id=allocateRegisters(registers,registerClasses,(*iter),id);
    for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.unions.begin(),limit=query.unions.end();iter!=limit;++iter)
+      for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         id=allocateRegisters(registers,registerClasses,(*iter2),id);
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.substractions.begin(),limit=query.substractions.end();iter!=limit;++iter)
       for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          id=allocateRegisters(registers,registerClasses,(*iter2),id);
    for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter) {

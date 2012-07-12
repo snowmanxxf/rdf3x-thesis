@@ -83,6 +83,7 @@ static void writeHeader(const QueryGraph& graph,const SPARQLParser& parser)
 static void runQuery(DifferentialIndex& diffIndex,const string& query)
    // Evaluate a query
 {
+
    QueryGraph queryGraph;
 
    // Parse the query

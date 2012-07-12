@@ -50,8 +50,13 @@ void Substraction::BuildHashTable::run()
       if (!joinCandidate)
          continue;
       // Compute the slots
-      unsigned leftKey=leftValue->value;
-      unsigned slot1=hash1(leftKey,hashTableSize),slot2=hash2(leftKey,hashTableSize);
+      //unsigned leftKey=leftValue->value;
+      std::vector<unsigned> leftKey;
+      leftKey.push_back(leftValue->value);
+	  for (unsigned index=0,limit=leftTail.size();index<limit;++index)
+		   leftKey.push_back(leftTail[index]->value);
+
+      unsigned slot1=hash1(leftKey.front(),hashTableSize),slot2=hash2(leftKey.front(),hashTableSize);
 
       // Scan if the entry already exists
       Entry* e=join.hashTable[slot1];
@@ -140,7 +145,7 @@ void Substraction::insert(Entry* e)
    // Try to insert
    bool firstTable=true;
    for (unsigned index=0;index<hashTableSize;index++) {
-      unsigned slot=firstTable?hash1(e->key,hashTableSize):hash2(e->key,hashTableSize);
+      unsigned slot=firstTable?hash1(e->key.front(),hashTableSize):hash2(e->key.front(),hashTableSize);
       swap(e,hashTable[slot]);
       if (!e)
          return;
@@ -157,19 +162,33 @@ void Substraction::insert(Entry* e)
    insert(e);
 }
 //---------------------------------------------------------------------------
-bool Substraction::lookup(unsigned key)
+Substraction::Entry* Substraction::lookup(std::vector<unsigned> key)
    // Search an entry in the hash table
 {
    unsigned hashTableSize=hashTable.size()/2;
-   Entry* e=hashTable[hash1(key,hashTableSize)];
-   while (e=e->next)
-	   if (e&&(e->key==key))
-		  return false;
-   e=hashTable[hash2(key,hashTableSize)];
-   while (e=e->next)
-	   if (e&&(e->key==key))
-		  return false;
-   return true;
+   Entry* e=hashTable[hash1(key.front(),hashTableSize)];
+   if (e&&(e->key==key))
+      return e;
+   e=hashTable[hash2(key.front(),hashTableSize)];
+   if (e&&(e->key==key))
+      return e;
+   return 0;
+}
+//---------------------------------------------------------------------------
+bool Substraction::contains( std::vector<unsigned> key){
+	unsigned hashTableSize=hashTable.size()/2;
+	unsigned slot1=hash1(key.front(),hashTableSize),slot2=hash2(key.front(),hashTableSize);
+	  Entry* e=hashTable[slot1];
+	  if ((!e)||(e->key!=key))
+		 e=hashTable[slot2];
+	  if (e&&(e->key==key)) {
+		 for (Entry* iter=e;iter;iter=iter->next)
+			if (key==iter->key) {
+			   // Tuple already in the table?
+			   return true;
+			}
+	  }
+	  return false;
 }
 //---------------------------------------------------------------------------
 unsigned Substraction::first()
@@ -184,8 +203,11 @@ unsigned Substraction::first()
    if ((rightCount=probePeekTask.count)==0)
       return false;
 
+   rightKey.push_back(rightValue->value);
+	  for (unsigned index=0,limit=rightTail.size();index<limit;++index)
+		  rightKey.push_back(rightTail[index]->value);
    // Setup the lookup
-   exists=lookup(rightValue->value);
+   found=contains(rightKey);
 
    return next();
 }
@@ -193,27 +215,53 @@ unsigned Substraction::first()
 unsigned Substraction::next()
    // Produce the next tuple
 {
+    //if ((rightCount=right->next())==0)
+    //   return false;
+	if (rightCount==0)
+		return false;
    // Repeat until a match is found
    while (true) {
-      // Still scanning the hash table?
-      /*for (;hashTableIter;hashTableIter=hashTableIter->next) {
-         unsigned leftCount=hashTableIter->count;
-         leftValue->value=hashTableIter->key;
-         for (unsigned index=0,limit=leftTail.size();index<limit;++index)
-            leftTail[index]->value=hashTableIter->values[index];
-         hashTableIter=hashTableIter->next;
 
-         unsigned count=leftCount*rightCount;
-         observedOutputCardinality+=count;
-         return count;
-      }*/
-      if (!exists)
-    	  return rightCount;
+      if (!found) {
+		   leftValue->value=rightValue->value;
+
+		   cout << leftValue->value << "!";
+		   for (unsigned index=0,limit=leftTail.size();index<limit;++index) {
+			  leftTail[index]->value=rightTail[index]->value;
+			  cout << leftTail[index]->value << ":";
+		   }
+		   cout << endl;
+
+		   observedOutputCardinality+=rightCount;
+		   unsigned count = rightCount;
+		   rightCount=right->next();
+		   rightKey.push_back(rightValue->value);
+			  for (unsigned index=0,limit=rightTail.size();index<limit;++index)
+				  rightKey.push_back(rightTail[index]->value);
+		   found=contains(rightKey);
+
+		      cout << rightValue->value << "!";
+		      for (unsigned index=0,limit=rightTail.size();index<limit;++index) {
+				  cout << rightTail[index]->value << ":";
+			   }
+		      cout << endl;
+
+		   return count;
+      }
 
       // Read the next tuple from the right
       if ((rightCount=right->next())==0)
          return false;
-      exists=lookup(rightValue->value);
+      rightKey.push_back(rightValue->value);
+   	  for (unsigned index=0,limit=rightTail.size();index<limit;++index)
+   		  rightKey.push_back(rightTail[index]->value);
+      found=contains(rightKey);
+
+      cout << rightValue->value << "!";
+      for (unsigned index=0,limit=rightTail.size();index<limit;++index) {
+		  cout << rightTail[index]->value << ":";
+	   }
+      cout << endl;
    }
 }
 //---------------------------------------------------------------------------
