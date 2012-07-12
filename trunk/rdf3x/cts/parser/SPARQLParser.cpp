@@ -857,6 +857,23 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
                   continue;
                break;
             }
+         } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("substraction"))) {
+             group.substractions.push_back(vector<PatternGroup>());
+             vector<PatternGroup>& currentSubstraction=group.substractions.back();
+             currentSubstraction.push_back(newGroup);
+             while (true) {
+                if (lexer.getNext()!=SPARQLLexer::LCurly)
+                   throw ParserException("'{' expected");
+                PatternGroup subGroup;
+                parseGroupGraphPattern(subGroup);
+                currentSubstraction.push_back(subGroup);
+
+                // Another union?
+                token=lexer.getNext();
+                if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("substraction")))
+                   continue;
+                break;
+             }
          } else {
             // No, simply merge it
             group.patterns.insert(group.patterns.end(),newGroup.patterns.begin(),newGroup.patterns.end());

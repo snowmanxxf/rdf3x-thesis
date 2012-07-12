@@ -54,7 +54,6 @@ class SPARQLParser
    struct Pattern {
       /// The entires
       Element subject,predicate,object;
-
       /// Constructor
       Pattern(Element subject,Element predicate,Element object);
       /// Destructor
@@ -101,6 +100,8 @@ class SPARQLParser
       std::vector<PatternGroup> optional;
       /// The union parts
       std::vector<std::vector<PatternGroup> > unions;
+      /// The substraction parts
+      std::vector<std::vector<PatternGroup> > substractions;
    };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };

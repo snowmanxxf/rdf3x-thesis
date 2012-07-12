@@ -27,8 +27,6 @@ class QueryGraph
       unsigned subject,predicate,object;
       /// Which of the three values are constants?
       bool constSubject,constPredicate,constObject;
-      // Is the node negated?
-      bool isNegation;
       /// Is there an implicit join edge to another node?
       bool canJoin(const Node& other) const;
    };
