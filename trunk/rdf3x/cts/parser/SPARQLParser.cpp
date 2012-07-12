@@ -857,7 +857,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
                   continue;
                break;
             }
-         } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("substraction"))) {
+         } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("minus"))) {
              group.substractions.push_back(vector<PatternGroup>());
              vector<PatternGroup>& currentSubstraction=group.substractions.back();
              currentSubstraction.push_back(newGroup);
@@ -870,7 +870,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
 
                 // Another union?
                 token=lexer.getNext();
-                if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("substraction")))
+                if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("minus")))
                    continue;
                 break;
              }
@@ -880,6 +880,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
             group.filters.insert(group.filters.end(),newGroup.filters.begin(),newGroup.filters.end());
             group.optional.insert(group.optional.end(),newGroup.optional.begin(),newGroup.optional.end());
             group.unions.insert(group.unions.end(),newGroup.unions.begin(),newGroup.unions.end());
+            group.substractions.insert(group.substractions.end(),newGroup.substractions.begin(),newGroup.substractions.end());
          }
          if (token!=SPARQLLexer::Dot)
             lexer.unget(token);

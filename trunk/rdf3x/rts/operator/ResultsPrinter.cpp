@@ -88,12 +88,14 @@ static void printResult(map<unsigned,CacheEntry>& stringCache,vector<unsigned>::
 {
    if (start==stop) return;
    if (!~(*start))
-      cout << "NULL"; else
+      cout << "NULL";
+   else
       stringCache[*start].print(stringCache,escape);
    for (++start;start!=stop;++start) {
       cout << ' ';
       if (!~(*start))
-         cout << "NULL"; else
+         cout << "NULL";
+      else
          stringCache[*start].print(stringCache,escape);
    }
 }

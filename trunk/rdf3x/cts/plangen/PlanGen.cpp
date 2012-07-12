@@ -672,6 +672,7 @@ static void findFilters(Plan* plan,set<const QueryGraph::Filter*>& filters)
       case Plan::NestedLoopJoin:
       case Plan::MergeJoin:
       case Plan::HashJoin:
+      case Plan::Substraction:
          findFilters(plan->left,filters);
          findFilters(plan->right,filters);
          break;
@@ -720,7 +721,7 @@ Plan* PlanGen::translate(const QueryGraph::SubQuery& query)
       last=p;
    }
    for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.substractions.begin(),limit=query.substractions.end();iter!=limit;++iter,++id) {
-      Problem* p=buildSubstractions(*iter,id);
+      Problem* p=buildSubstraction(*iter,id);
       if (last)
          last->next=p;
       else

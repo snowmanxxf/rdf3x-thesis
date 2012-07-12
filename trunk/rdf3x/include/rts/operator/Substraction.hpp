@@ -13,7 +13,9 @@
 #include "rts/operator/Operator.hpp"
 #include "rts/operator/Scheduler.hpp"
 #include "infra/util/VarPool.hpp"
+#include <iostream>
 #include <vector>
+#include <map>
 //---------------------------------------------------------------------------
 class Register;
 //---------------------------------------------------------------------------
@@ -26,7 +28,8 @@ class Substraction : public Operator
       /// The next entry
       Entry* next;
       /// The key
-      unsigned key;
+      //unsigned key;
+      std::vector<unsigned> key;
       /// The count
       unsigned count;
       /// Further values
@@ -67,6 +70,10 @@ class Substraction : public Operator
    };
    friend class ProbePeek;
 
+
+   bool contains(std::vector<unsigned> key);
+   bool found;
+
    /// The input
    Operator* left,*right;
    /// The join attributes
@@ -83,12 +90,15 @@ class Substraction : public Operator
    bool exists;
    /// The tuple count from the right side
    unsigned rightCount;
+   // Right key;
+   std::vector<unsigned> rightKey;
    /// Task
    BuildHashTable buildHashTableTask;
    /// Task
    ProbePeek probePeekTask;
    /// Task priorities
    double hashPriority,probePriority;
+
 
    /// Insert into the hash table
    void insert(Entry* e);

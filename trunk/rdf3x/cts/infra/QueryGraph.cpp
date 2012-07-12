@@ -235,6 +235,7 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
       for (unsigned index2=index+1;index2<limit;index2++)
          if (intersects(substractionBindings[index],substractionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(substractionOfs+index,substractionOfs+index2,common));
+   }
 }
 //---------------------------------------------------------------------------
 void QueryGraph::constructEdges()
