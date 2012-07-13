@@ -13,8 +13,24 @@
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
-static inline unsigned hash1(unsigned key,unsigned hashTableSize) { return key&(hashTableSize-1); }
-static inline unsigned hash2(unsigned key,unsigned hashTableSize) { return hashTableSize+((key^(key>>3))&(hashTableSize-1)); }
+static inline unsigned singlehash1(unsigned key,unsigned hashTableSize) {
+	return key&(hashTableSize-1);
+}
+static inline unsigned singlehash2(unsigned key,unsigned hashTableSize) {
+	return hashTableSize+((key^(key>>3))&(hashTableSize-1));
+}
+static inline unsigned hash1(std::vector<unsigned> key,unsigned hashTableSize) {
+	unsigned newkey = 0;
+	for (unsigned index=0,limit=key.size();index<limit;++index)
+		newkey = (newkey>>1) + key[index];
+	return singlehash1(newkey,hashTableSize);
+}
+static inline unsigned hash2(std::vector<unsigned> key,unsigned hashTableSize) {
+	unsigned newkey = 0;
+	for (unsigned index=0,limit=key.size();index<limit;++index)
+		newkey = (newkey>>1) + key[index];
+	return singlehash2(newkey,hashTableSize);
+}
 //---------------------------------------------------------------------------
 void Substraction::BuildHashTable::run()
    // Build the hash table
@@ -22,22 +38,19 @@ void Substraction::BuildHashTable::run()
    if (done) return; // XXX support repeated executions under nested loop joins etc!
 
    // Prepare relevant domain informations
-   Register* leftValue=join.leftValue;
    vector<Register*> domainRegs;
-   if (leftValue->domain)
-      domainRegs.push_back(leftValue);
-   for (vector<Register*>::const_iterator iter=join.leftTail.begin(),limit=join.leftTail.end();iter!=limit;++iter)
+   for (vector<Register*>::const_iterator iter=join.rightJoinKeys.begin(),limit=join.rightJoinKeys.end();iter!=limit;++iter)
       if ((*iter)->domain)
          domainRegs.push_back(*iter);
    vector<ObservedDomainDescription> observedDomains;
    observedDomains.resize(domainRegs.size());
 
-   // Build the hash table from the left side
+   // Build the hash table from the right side
    unsigned hashTableSize = 1024;
-   unsigned tailLength=join.leftTail.size();
+
    join.hashTable.clear();
    join.hashTable.resize(2*hashTableSize);
-   for (unsigned leftCount=join.left->first();leftCount;leftCount=join.left->next()) {
+   for (unsigned rightCount=join.right->first();rightCount;rightCount=join.right->next()) {
       // Check the domain first
       bool joinCandidate=true;
       for (unsigned index=0,limit=domainRegs.size();index<limit;++index) {
@@ -50,61 +63,61 @@ void Substraction::BuildHashTable::run()
       if (!joinCandidate)
          continue;
       // Compute the slots
-      //unsigned leftKey=leftValue->value;
-      std::vector<unsigned> leftKey;
-      leftKey.push_back(leftValue->value);
-	  for (unsigned index=0,limit=leftTail.size();index<limit;++index)
-		   leftKey.push_back(leftTail[index]->value);
+      //unsigned rightKey=rightValue->value;
 
-      unsigned slot1=hash1(leftKey.front(),hashTableSize),slot2=hash2(leftKey.front(),hashTableSize);
+      std::vector<unsigned> rightKey = join.getKey(join.rightJoinKeys);
+      join.printKey(rightKey);
+      //rightKey.clear();
+      //rightKey.push_back(rightValue->value);
+	  //for (unsigned index=0,limit=join.rightTail.size();index<limit;++index)
+	  //   rightKey.push_back(join.rightTail[index]->value);
+
+      unsigned slot1=hash1(rightKey,hashTableSize),slot2=hash2(rightKey,hashTableSize);
 
       // Scan if the entry already exists
       Entry* e=join.hashTable[slot1];
-      if ((!e)||(e->key!=leftKey))
+      if ((!e)||(e->key!=rightKey))
          e=join.hashTable[slot2];
-      if (e&&(e->key==leftKey)) {
+      if (e&&(join.equalKeys(rightKey,e->key))) {
          unsigned ofs=(e==join.hashTable[slot1])?slot1:slot2;
          bool match=false;
          for (Entry* iter=e;iter;iter=iter->next)
-            if (leftKey==iter->key) {
+            if (join.equalKeys(rightKey,iter->key)) {
                // Tuple already in the table?
                match=true;
-               for (unsigned index2=0;index2<tailLength;index2++)
-                  if (join.leftTail[index2]->value!=iter->values[index2]) {
-                     match=false;
-                     break;
-                  }
                // Then aggregate
                if (match) {
-                  iter->count+=leftCount;
+                  iter->count+=rightCount;
                   break;
                }
             }
          if (match)
             continue;
 
+         cout << "appending to bucket" << endl;
          // Append to the current bucket
          e=join.entryPool.alloc();
          e->next=join.hashTable[ofs];
          join.hashTable[ofs]=e;
-         e->key=leftKey;
-         e->count=leftCount;
-         for (unsigned index2=0;index2<tailLength;index2++)
-            e->values[index2]=join.leftTail[index2]->value;
+         e->key=rightKey;
+         e->count=rightCount;
+         cout << "appended to bucket" << endl;
          continue;
       }
 
+      cout << "adding to table" << endl;
       // Create a new tuple
       e=join.entryPool.alloc();
       e->next=0;
-      e->key=leftKey;
-      e->count=leftCount;
-      for (unsigned index2=0;index2<tailLength;index2++)
-         e->values[index2]=join.leftTail[index2]->value;
+      e->key=rightKey;
+      e->count=rightCount;
 
       // And insert it
+      cout << "inserting into table" << endl;
       join.insert(e);
+      cout << "updating hashtable size" << endl;
       hashTableSize=join.hashTable.size()/2;
+      cout << "added to table" << endl;
    }
 
    // Update the domains
@@ -119,13 +132,13 @@ void Substraction::ProbePeek::run()
 {
    if (done) return; // XXX support repeated executions under nested loop joins etc!
 
-   count=join.right->first();
+   count=join.left->first();
    done=true;
 }
 //---------------------------------------------------------------------------
-Substraction::Substraction(Operator* left,Register* leftValue,const vector<Register*>& leftTail,Operator* right,Register* rightValue,const vector<Register*>& rightTail,double hashPriority,double probePriority,double expectedOutputCardinality)
-   : Operator(expectedOutputCardinality),left(left),right(right),leftValue(leftValue),rightValue(rightValue),
-     leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
+Substraction::Substraction(Operator* left,std::vector<Register*> leftJoinKeys,const std::vector<Register*>& leftTail,Operator* right,std::vector<Register*> rightJoinKeys,const std::vector<Register*>& rightTail,double hashPriority,double probePriority,double expectedOutputCardinality)
+   : Operator(expectedOutputCardinality),left(left),right(right),
+     leftJoinKeys(leftJoinKeys),rightJoinKeys(rightJoinKeys),leftTail(leftTail),rightTail(rightTail),entryPool(leftTail.size()*sizeof(unsigned)),
      buildHashTableTask(*this),probePeekTask(*this),hashPriority(hashPriority),probePriority(probePriority)
    // Constructor
 {
@@ -145,7 +158,7 @@ void Substraction::insert(Entry* e)
    // Try to insert
    bool firstTable=true;
    for (unsigned index=0;index<hashTableSize;index++) {
-      unsigned slot=firstTable?hash1(e->key.front(),hashTableSize):hash2(e->key.front(),hashTableSize);
+      unsigned slot=firstTable?hash1(e->key,hashTableSize):hash2(e->key,hashTableSize);
       swap(e,hashTable[slot]);
       if (!e)
          return;
@@ -166,28 +179,57 @@ Substraction::Entry* Substraction::lookup(std::vector<unsigned> key)
    // Search an entry in the hash table
 {
    unsigned hashTableSize=hashTable.size()/2;
-   Entry* e=hashTable[hash1(key.front(),hashTableSize)];
+   Entry* e=hashTable[hash1(key,hashTableSize)];
    if (e&&(e->key==key))
       return e;
-   e=hashTable[hash2(key.front(),hashTableSize)];
+   e=hashTable[hash2(key,hashTableSize)];
    if (e&&(e->key==key))
       return e;
    return 0;
 }
 //---------------------------------------------------------------------------
-bool Substraction::contains( std::vector<unsigned> key){
-	unsigned hashTableSize=hashTable.size()/2;
-	unsigned slot1=hash1(key.front(),hashTableSize),slot2=hash2(key.front(),hashTableSize);
+void Substraction::printKey(std::vector<unsigned> key) {
+   cout << "Key=[";
+	for (unsigned index=0,limit=key.size();index<limit;++index)
+	  cout << key[index] << "::";
+   cout << "]" << endl;
+}
+std::vector<unsigned> Substraction::getKey(std::vector<Register*> keyRegs) {
+	std::vector<unsigned> key;
+	key.clear();
+	for (std::vector<Register*>::const_iterator iter=keyRegs.begin(),limit=keyRegs.end();iter!=limit;++iter)
+		key.push_back((*iter)->value);
+	return key;
+
+}
+bool Substraction::equalKeys(std::vector<unsigned> key1, std::vector<unsigned> key2){
+	if (key1.size()!=key2.size()) {
+		cout << "Keys with different size" << endl;
+		return false;
+	}
+	for (unsigned index=0,limit=key1.size();index<limit;++index)
+		if (key1[index]!=key2[index]) {
+			cout << "Different keys" << endl;
+			return false;
+		}
+	cout << "equalKeys=true!" << endl;
+	return true;
+}
+bool Substraction::contains(std::vector<unsigned> key){
+	  unsigned hashTableSize=hashTable.size()/2;
+	  unsigned slot1=hash1(key,hashTableSize),slot2=hash2(key,hashTableSize);
 	  Entry* e=hashTable[slot1];
-	  if ((!e)||(e->key!=key))
+	  if ((!e)||(!equalKeys(e->key,key)))
 		 e=hashTable[slot2];
-	  if (e&&(e->key==key)) {
+	  if (e&&(equalKeys(e->key,key))) {
 		 for (Entry* iter=e;iter;iter=iter->next)
-			if (key==iter->key) {
+			if (equalKeys(key,iter->key)) {
 			   // Tuple already in the table?
+			   cout << "Key was found in hashtable" << endl;
 			   return true;
 			}
 	  }
+	  cout << "Key was NOT found in hashtable" << endl;
 	  return false;
 }
 //---------------------------------------------------------------------------
@@ -198,16 +240,25 @@ unsigned Substraction::first()
    // Build the hash table if not already done
    buildHashTableTask.run();
 
-   // Read the first tuple from the right side
+   // Read the first tuple from the left side
    probePeekTask.run();
-   if ((rightCount=probePeekTask.count)==0)
+   if ((leftCount=probePeekTask.count)==0)
       return false;
 
-   rightKey.push_back(rightValue->value);
-	  for (unsigned index=0,limit=rightTail.size();index<limit;++index)
-		  rightKey.push_back(rightTail[index]->value);
+   cout << "rightTail.size()=" << rightTail.size() << endl;
+   cout << "leftTail.size()=" << leftTail.size() << endl;
+
+   leftKey.clear();
+   leftKey = getKey(leftJoinKeys);
+   printKey(leftKey);
+
+   //leftKey.push_back(leftValue->value);
+   //for (unsigned index=0,limit=leftTail.size();index<limit;++index)
+   //	  leftKey.push_back(leftTail[index]->value);
+
    // Setup the lookup
-   found=contains(rightKey);
+   found=contains(leftKey);
+   askForNext=false;
 
    return next();
 }
@@ -215,53 +266,36 @@ unsigned Substraction::first()
 unsigned Substraction::next()
    // Produce the next tuple
 {
-    //if ((rightCount=right->next())==0)
-    //   return false;
-	if (rightCount==0)
-		return false;
-   // Repeat until a match is found
    while (true) {
+	   if (askForNext) {
+		  // Read the next tuple from the left
+		  if ((leftCount=left->next())==0)
+			 return false;
+
+		  leftKey.clear();
+		  leftKey = getKey(leftJoinKeys);
+		  printKey(leftKey);
+
+		  found=contains(leftKey);
+
+	  }
+	  else askForNext=true;
+
 
       if (!found) {
-		   leftValue->value=rightValue->value;
+    	   for (std::vector<Register*>::const_iterator iter1=rightJoinKeys.begin(),iter2=leftJoinKeys.begin(),limit=rightJoinKeys.end();iter1!=limit;++iter1,++iter2) {
+    		   (*iter1)->value = (*iter2)->value;
+    	   }
 
-		   cout << leftValue->value << "!";
-		   for (unsigned index=0,limit=leftTail.size();index<limit;++index) {
-			  leftTail[index]->value=rightTail[index]->value;
-			  cout << leftTail[index]->value << ":";
-		   }
-		   cout << endl;
+		   observedOutputCardinality+=leftCount;
+		   unsigned count = leftCount;
 
-		   observedOutputCardinality+=rightCount;
-		   unsigned count = rightCount;
-		   rightCount=right->next();
-		   rightKey.push_back(rightValue->value);
-			  for (unsigned index=0,limit=rightTail.size();index<limit;++index)
-				  rightKey.push_back(rightTail[index]->value);
-		   found=contains(rightKey);
+		   found=contains(leftKey);
 
-		      cout << rightValue->value << "!";
-		      for (unsigned index=0,limit=rightTail.size();index<limit;++index) {
-				  cout << rightTail[index]->value << ":";
-			   }
-		      cout << endl;
-
+		   cout << "count=" << count << endl;
 		   return count;
       }
 
-      // Read the next tuple from the right
-      if ((rightCount=right->next())==0)
-         return false;
-      rightKey.push_back(rightValue->value);
-   	  for (unsigned index=0,limit=rightTail.size();index<limit;++index)
-   		  rightKey.push_back(rightTail[index]->value);
-      found=contains(rightKey);
-
-      cout << rightValue->value << "!";
-      for (unsigned index=0,limit=rightTail.size();index<limit;++index) {
-		  cout << rightTail[index]->value << ":";
-	   }
-      cout << endl;
    }
 }
 //---------------------------------------------------------------------------
@@ -269,7 +303,7 @@ void Substraction::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
    out.beginOperator("Substraction",expectedOutputCardinality,observedOutputCardinality);
-   out.addEqualPredicateAnnotation(leftValue,rightValue);
+   //out.addEqualPredicateAnnotation(leftJoinKeys.front,rightJoinKeys.front());
    out.addMaterializationAnnotation(leftTail);
    out.addMaterializationAnnotation(rightTail);
    left->print(out);

@@ -32,8 +32,6 @@ class Substraction : public Operator
       std::vector<unsigned> key;
       /// The count
       unsigned count;
-      /// Further values
-      unsigned values[];
    };
    /// Hash table task
    class BuildHashTable : public Scheduler::AsyncPoint {
@@ -71,13 +69,17 @@ class Substraction : public Operator
    friend class ProbePeek;
 
 
+   void printKey(std::vector<unsigned> key);
    bool contains(std::vector<unsigned> key);
+   std::vector<unsigned> getKey(std::vector<Register*> keyRegs);
+   bool equalKeys(std::vector<unsigned> key1, std::vector<unsigned> key2);
+   bool askForNext;
    bool found;
 
    /// The input
    Operator* left,*right;
    /// The join attributes
-   Register* leftValue,*rightValue;
+   std::vector<Register*> leftJoinKeys,rightJoinKeys;
    /// The non-join attributes
    std::vector<Register*> leftTail,rightTail;
    /// The pool of hash entry
@@ -89,9 +91,9 @@ class Substraction : public Operator
    // Indicates whether the current right entry exists in hashtable
    bool exists;
    /// The tuple count from the right side
-   unsigned rightCount;
+   unsigned leftCount;
    // Right key;
-   std::vector<unsigned> rightKey;
+   std::vector<unsigned> leftKey;
    /// Task
    BuildHashTable buildHashTableTask;
    /// Task
@@ -103,11 +105,11 @@ class Substraction : public Operator
    /// Insert into the hash table
    void insert(Entry* e);
    /// Lookup an entry
-   inline Entry* lookup(unsigned key);
+   inline Entry* lookup(std::vector<unsigned> key);
 
    public:
    /// Constructor
-   Substraction(Operator* left,Register* leftValue,const std::vector<Register*>& leftTail,Operator* right,Register* rightValue,const std::vector<Register*>& rightTail,double hashPriority,double probePriority,double expectedOutputCardinality);
+   Substraction(Operator* left,std::vector<Register*> leftJoinKeys,const std::vector<Register*>& leftTail,Operator* right,std::vector<Register*> rightJoinKeys,const std::vector<Register*>& rightTail,double hashPriority,double probePriority,double expectedOutputCardinality);
    /// Destructor
    ~Substraction();
 
