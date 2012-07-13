@@ -1,5 +1,6 @@
 #ifndef H_rts_operator_Substraction
 #define H_rts_operator_Substraction
+#define KEYSIZE 2
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -29,7 +30,7 @@ class Substraction : public Operator
       Entry* next;
       /// The key
       //unsigned key;
-      std::vector<unsigned> key;
+      unsigned key[KEYSIZE];
       /// The count
       unsigned count;
    };
@@ -69,10 +70,10 @@ class Substraction : public Operator
    friend class ProbePeek;
 
 
-   void printKey(std::vector<unsigned> key);
-   bool contains(std::vector<unsigned> key);
-   std::vector<unsigned> getKey(std::vector<Register*> keyRegs);
-   bool equalKeys(std::vector<unsigned> key1, std::vector<unsigned> key2);
+   void printKey(unsigned key[KEYSIZE]);
+   bool contains(unsigned key[KEYSIZE]);
+   void getKey(std::vector<Register*> keyRegs, unsigned key[KEYSIZE]);
+   bool equalKeys(unsigned key1[KEYSIZE],unsigned key2[KEYSIZE]);
    bool askForNext;
    bool found;
 
@@ -93,7 +94,7 @@ class Substraction : public Operator
    /// The tuple count from the right side
    unsigned leftCount;
    // Right key;
-   std::vector<unsigned> leftKey, rightKey;
+   unsigned leftKey[KEYSIZE], rightKey[KEYSIZE];
    /// Task
    BuildHashTable buildHashTableTask;
    /// Task
@@ -104,8 +105,6 @@ class Substraction : public Operator
 
    /// Insert into the hash table
    void insert(Entry* e);
-   /// Lookup an entry
-   inline Entry* lookup(std::vector<unsigned> key);
 
    public:
    /// Constructor

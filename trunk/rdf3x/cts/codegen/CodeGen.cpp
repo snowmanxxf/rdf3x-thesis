@@ -192,6 +192,18 @@ static void getJoinVariables(const map<unsigned,Register*>& context,set<unsigned
    }
 }
 //---------------------------------------------------------------------------
+static void mergeBindingsForSubstraction(const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<unsigned,Register*>& leftBindings)
+   // Merge bindings after a join
+{
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
+      if (projection.count((*iter).first))
+         bindings[(*iter).first]=(*iter).second;
+   /*for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
+      if (projection.count((*iter).first)&&(!bindings.count((*iter).first)))
+         bindings[(*iter).first]=(*iter).second;
+   */
+}
+//---------------------------------------------------------------------------
 static void mergeBindings(const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<unsigned,Register*>& leftBindings,const map<unsigned,Register*>& rightBindings)
    // Merge bindings after a join
 {
@@ -293,31 +305,67 @@ static Operator* translateSubstraction(Runtime& runtime,const map<unsigned,Regis
 {
    // Get the join variables (if any)
    set<unsigned> joinVariables,newProjection=projection;
+
+
+
    getJoinVariables(context,joinVariables,plan->left,plan->right);
+
+   cout << "JoinVariables: ";
+   for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter)
+	   cout << *iter << ", ";
+   cout << endl;
+
    newProjection.insert(joinVariables.begin(),joinVariables.end());
    assert(!joinVariables.empty());
-   unsigned joinOn=*(joinVariables.begin());
 
    // Build the input trees
    map<unsigned,Register*> leftBindings,rightBindings;
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
-   mergeBindings(projection,bindings,leftBindings,rightBindings);
+   mergeBindingsForSubstraction(projection,bindings,leftBindings);
+
+   cout << "Bindings: ";
+   for (map<unsigned,Register*>::const_iterator iter=bindings.begin(),limit=bindings.end();iter!=limit;++iter)
+	   cout << (*iter).first << ", " << (*iter).second->value << endl;
+
+   vector<Register*> leftKeys, rightKeys;
+   for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+	   leftKeys.push_back(leftBindings[*iter]);
+	   rightKeys.push_back(rightBindings[*iter]);
+   }
+
+   cout << "NewProjection: ";
+   for (set<unsigned>::const_iterator iter=newProjection.begin(),limit=newProjection.end();iter!=limit;++iter)
+	   cout << *iter << ", ";
+   cout << endl;
 
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
-   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter)
-      if ((*iter).first!=joinOn)
-         leftTail.push_back((*iter).second);
-   for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter)
-      if ((*iter).first!=joinOn)
-         rightTail.push_back((*iter).second);
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter) {
+	   bool add = true;
+	   for (set<unsigned>::const_iterator iter2=joinVariables.begin(),limit=joinVariables.end();iter2!=limit;++iter2)
+		   if ((*iter).first==(*iter2))
+			   add=false;
+       if (add)
+    	   leftTail.push_back((*iter).second);
+   }
+   cout << leftTail.size() << endl;
 
+   /*for (map<unsigned,Register*>::const_iterator iter=rightBindings.begin(),limit=rightBindings.end();iter!=limit;++iter) {
+	   bool add = true;
+	   for (set<unsigned>::const_iterator iter2=joinVariables.begin(),limit=joinVariables.end();iter2!=limit;++iter2)
+		   if ((*iter).first==(*iter2))
+			   add=false;
+       if (add)
+    	   rightTail.push_back((*iter).second);
+   }*/
+   cout << rightTail.size() << endl;
    // Build the operator
-   Operator* result=new Substraction(leftTree,leftBindings[joinOn],leftTail,rightTree,rightBindings[joinOn],rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
+   Operator* result=new Substraction(leftTree,leftKeys,leftTail,rightTree,rightKeys,rightTail,-plan->left->costs,plan->right->costs,plan->cardinality);
+   //Operator* result=new Substraction(rightTree,rightBindings[joinOn],rightTail,leftTree,leftBindings[joinOn],leftTail,-plan->right->costs,plan->left->costs,plan->cardinality);
 
    // And apply additional selections if necessary
-   result=addAdditionalSelections(runtime,result,joinVariables,leftBindings,rightBindings,joinOn);
+   //result=addAdditionalSelectionsForSubstraction(runtime,result,joinVariables,leftBindings,rightBindings);
 
    return result;
 }
@@ -745,7 +793,8 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
             regs.push_back(bindings[*iter]);
          for (QueryGraph::order_iterator iter=query.orderBegin(),limit=query.orderEnd();iter!=limit;++iter)
             if (~(*iter).id)
-               order.push_back(pair<Register*,bool>(bindings[(*iter).id],(*iter).descending)); else
+               order.push_back(pair<Register*,bool>(bindings[(*iter).id],(*iter).descending));
+            else
                order.push_back(pair<Register*,bool>(0,(*iter).descending));
          tree=new Sort(runtime.getDatabase(),tree,regs,order,tree->getExpectedOutputCardinality());
       }
@@ -753,7 +802,8 @@ Operator* CodeGen::translateIntern(Runtime& runtime,const QueryGraph& query,Plan
       // Remember the output registers
       for (QueryGraph::projection_iterator iter=query.projectionBegin(),limit=query.projectionEnd();iter!=limit;++iter)
          if (bindings.count(*iter))
-            output.push_back(bindings[*iter]); else
+            output.push_back(bindings[*iter]);
+         else
             output.push_back(runtime.getRegister(unboundVariable));
    }
 
