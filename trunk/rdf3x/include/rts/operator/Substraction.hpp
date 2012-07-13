@@ -93,7 +93,7 @@ class Substraction : public Operator
    /// The tuple count from the right side
    unsigned leftCount;
    // Right key;
-   std::vector<unsigned> leftKey;
+   std::vector<unsigned> leftKey, rightKey;
    /// Task
    BuildHashTable buildHashTableTask;
    /// Task

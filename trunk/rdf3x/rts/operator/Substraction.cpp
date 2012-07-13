@@ -35,7 +35,10 @@ static inline unsigned hash2(std::vector<unsigned> key,unsigned hashTableSize) {
 void Substraction::BuildHashTable::run()
    // Build the hash table
 {
-   if (done) return; // XXX support repeated executions under nested loop joins etc!
+   if (done) {
+	   cout << "hashtable done =)" << endl;
+	   return; // XXX support repeated executions under nested loop joins etc!
+   }
 
    // Prepare relevant domain informations
    vector<Register*> domainRegs;
@@ -47,6 +50,7 @@ void Substraction::BuildHashTable::run()
 
    // Build the hash table from the right side
    unsigned hashTableSize = 1024;
+   std::vector<unsigned> rightKey;
 
    join.hashTable.clear();
    join.hashTable.resize(2*hashTableSize);
@@ -62,15 +66,11 @@ void Substraction::BuildHashTable::run()
       }
       if (!joinCandidate)
          continue;
+
       // Compute the slots
       //unsigned rightKey=rightValue->value;
-
-      std::vector<unsigned> rightKey = join.getKey(join.rightJoinKeys);
+      rightKey = join.getKey(join.rightJoinKeys);
       join.printKey(rightKey);
-      //rightKey.clear();
-      //rightKey.push_back(rightValue->value);
-	  //for (unsigned index=0,limit=join.rightTail.size();index<limit;++index)
-	  //   rightKey.push_back(join.rightTail[index]->value);
 
       unsigned slot1=hash1(rightKey,hashTableSize),slot2=hash2(rightKey,hashTableSize);
 
@@ -88,15 +88,19 @@ void Substraction::BuildHashTable::run()
                // Then aggregate
                if (match) {
                   iter->count+=rightCount;
+                  rightKey.clear();
                   break;
                }
             }
-         if (match)
+         if (match) {
+        	rightKey.clear();
             continue;
+         }
 
          cout << "appending to bucket" << endl;
          // Append to the current bucket
          e=join.entryPool.alloc();
+         cout << "entry allocated" << endl;
          e->next=join.hashTable[ofs];
          join.hashTable[ofs]=e;
          e->key=rightKey;
@@ -108,9 +112,13 @@ void Substraction::BuildHashTable::run()
       cout << "adding to table" << endl;
       // Create a new tuple
       e=join.entryPool.alloc();
+      cout << "entry allocated" << endl;
       e->next=0;
+      cout << "next set to 0" << endl;
       e->key=rightKey;
+      cout << "key copied" << endl;
       e->count=rightCount;
+      cout << "count set" << endl;
 
       // And insert it
       cout << "inserting into table" << endl;
@@ -118,6 +126,8 @@ void Substraction::BuildHashTable::run()
       cout << "updating hashtable size" << endl;
       hashTableSize=join.hashTable.size()/2;
       cout << "added to table" << endl;
+
+      rightKey.clear();
    }
 
    // Update the domains
@@ -149,6 +159,7 @@ Substraction::~Substraction()
 {
    delete left;
    delete right;
+   entryPool.freeAll();
 }
 //---------------------------------------------------------------------------
 void Substraction::insert(Entry* e)
