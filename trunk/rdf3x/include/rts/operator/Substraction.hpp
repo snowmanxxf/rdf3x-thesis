@@ -106,6 +106,7 @@ class Substraction : public Operator
    /// Insert into the hash table
    void insert(Entry* e);
 
+
    public:
    /// Constructor
    Substraction(Operator* left,std::vector<Register*> leftJoinKeys,const std::vector<Register*>& leftTail,Operator* right,std::vector<Register*> rightJoinKeys,const std::vector<Register*>& rightTail,double hashPriority,double probePriority,double expectedOutputCardinality);
