@@ -19,15 +19,29 @@ static inline unsigned singlehash1(unsigned key,unsigned hashTableSize) {
 static inline unsigned singlehash2(unsigned key,unsigned hashTableSize) {
 	return hashTableSize+((key^(key>>3))&(hashTableSize-1));
 }
-static inline unsigned hash1(unsigned key[KEYSIZE],unsigned hashTableSize) {
+
+unsigned Substraction::hash1(std::vector<unsigned> key,unsigned hashTableSize) {
 	unsigned newkey = 0;
-	for (unsigned i=0;i<KEYSIZE;++i)
+	for (unsigned i=0;i<keySize;++i)
 		newkey = (newkey<<1) + key[i];
 	return singlehash1(newkey,hashTableSize);
 }
-static inline unsigned hash2(unsigned key[KEYSIZE],unsigned hashTableSize) {
+unsigned Substraction::hash1(unsigned key[],unsigned hashTableSize) {
+	unsigned newkey = 0;
+	for (unsigned i=0;i<keySize;++i)
+		newkey = (newkey<<1) + key[i];
+	return singlehash1(newkey,hashTableSize);
+}
+
+unsigned Substraction::hash2(std::vector<unsigned> key,unsigned hashTableSize) {
 	unsigned newkey = 1;
-	for (unsigned i=0;i<KEYSIZE;++i)
+	for (unsigned i=0;i<keySize;++i)
+		newkey = newkey * (key[i]^(key[i]>>3));
+	return singlehash2(newkey,hashTableSize);
+}
+unsigned Substraction::hash2(unsigned key[],unsigned hashTableSize) {
+	unsigned newkey = 1;
+	for (unsigned i=0;i<keySize;++i)
 		newkey = newkey * (key[i]^(key[i]>>3));
 	return singlehash2(newkey,hashTableSize);
 }
@@ -49,8 +63,10 @@ void Substraction::BuildHashTable::run()
    observedDomains.resize(domainRegs.size());
 
    // Build the hash table from the right side
-   unsigned hashTableSize = 10240;
-   unsigned rightKey[KEYSIZE];
+   unsigned hashTableSize = 1024;
+   join.keySize = join.rightJoinKeys.size();
+   cout << "keySize=" << join.keySize << endl;
+
 
    join.hashTable.clear();
    join.hashTable.resize(2*hashTableSize);
@@ -68,21 +84,23 @@ void Substraction::BuildHashTable::run()
          continue;
 
       // Compute the slots
-      //unsigned rightKey=rightValue->value;
-      join.getKey(join.rightJoinKeys,rightKey);
-      //join.printKey(rightKey);
+      //unsigned join.rightKey=rightValue->value;
+      cout << "Getting rightKey" << endl;
+      join.getKey(join.rightJoinKeys,join.rightKey);
+      join.printKey(join.rightKey);
+      unsigned slot1=join.hash1(join.rightKey,hashTableSize),slot2=join.hash2(join.rightKey,hashTableSize);
+      cout << "Hashvalues: " << slot1 << " " << slot2 << endl;
 
-      unsigned slot1=hash1(rightKey,hashTableSize),slot2=hash2(rightKey,hashTableSize);
 
       // Scan if the entry already exists
       Entry* e=join.hashTable[slot1];
-      if ((!e)||(e->key!=rightKey))
+      if ((!e)||(!join.equalKeys(e->key,join.rightKey)))
          e=join.hashTable[slot2];
-      if (e&&(join.equalKeys(rightKey,e->key))) {
+      if (e&&(join.equalKeys(e->key,join.rightKey))) {
          unsigned ofs=(e==join.hashTable[slot1])?slot1:slot2;
          bool match=false;
          for (Entry* iter=e;iter;iter=iter->next)
-            if (join.equalKeys(rightKey,iter->key)) {
+            if (join.equalKeys(iter->key,join.rightKey)) {
                // Tuple already in the table?
                match=true;
                // Then aggregate
@@ -95,35 +113,33 @@ void Substraction::BuildHashTable::run()
             continue;
          }
 
-         //cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!appending to bucket" << endl;
          // Append to the current bucket
+         cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!appending to bucket" << endl;
          e=join.entryPool.alloc();
-         //cout << "entry allocated" << endl;
+         cout << "entry allocated" << endl;
          e->next=join.hashTable[ofs];
          join.hashTable[ofs]=e;
-         for (int i=0;i<KEYSIZE;i++) e->key[i]=rightKey[i];
          e->count=rightCount;
-         //cout << "appended to bucket" << endl;
+         for (unsigned i=0;i<join.keySize;i++) e->key[i]=join.rightKey[i];
+         cout << "key=[";for (unsigned i=0;i<join.keySize;i++) cout << e->key[i] << ":"; cout << "]" << endl;
+         cout << "appended to bucket" << endl;
          continue;
       }
 
-      //cout << "adding to table" << endl;
       // Create a new tuple
+      cout << "adding to table" << endl;
       e=join.entryPool.alloc();
-      //cout << "entry allocated" << endl;
+      cout << "entry allocated" << endl;
       e->next=0;
-      //cout << "next set to 0" << endl;
-      for (int i=0;i<KEYSIZE;i++) e->key[i]=rightKey[i];
-      //cout << "key copied" << endl;
       e->count=rightCount;
-      //cout << "count set" << endl;
+      for (unsigned i=0;i<join.keySize;i++) e->key[i]=join.rightKey[i];
+      cout << "key=[";for (unsigned i=0;i<join.keySize;i++) cout << e->key[i] << ":"; cout << "]" << endl;
 
       // And insert it
-      //cout << "inserting into table" << endl;
+      cout << "inserting into table" << endl;
       join.insert(e);
-      //cout << "updating hashtable size" << endl;
       hashTableSize=join.hashTable.size()/2;
-      //cout << "added to table" << endl;
+      cout << "added to table" << endl;
 
    }
 
@@ -149,6 +165,8 @@ Substraction::Substraction(Operator* left,std::vector<Register*> leftJoinKeys,co
      buildHashTableTask(*this),probePeekTask(*this),hashPriority(hashPriority),probePriority(probePriority)
    // Constructor
 {
+	keySize = rightJoinKeys.size();
+	cout << "keySize=" << keySize << endl;
 }
 //---------------------------------------------------------------------------
 Substraction::~Substraction()
@@ -169,7 +187,7 @@ void Substraction::insert(Entry* e)
       unsigned slot=firstTable?hash1(e->key,hashTableSize):hash2(e->key,hashTableSize);
       swap(e,hashTable[slot]);
       if (!e) {
-    	  //cout << "inserted without rehashing" << endl;
+    	  cout << "inserted at " << slot << endl;
          return;
       }
       firstTable=!firstTable;
@@ -184,51 +202,55 @@ void Substraction::insert(Entry* e)
    for (vector<Entry*>::const_iterator iter=oldTable.begin(),limit=oldTable.end();iter!=limit;++iter)
       if (*iter) {
     	 count++;
-    	 //cout << "rehash insertion" << endl;
+    	 cout << "rehash insertion" << endl;
          insert(*iter);
       }
    cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! " << count << " out of " << 4*hashTableSize << endl;
    insert(e);
 }
 //---------------------------------------------------------------------------
-void Substraction::printKey(unsigned key[KEYSIZE]) {
-   cout << "Key=[";
-	for (unsigned index=0;index<KEYSIZE;++index)
-	  cout << key[index] << "::";
+void Substraction::printKey(std::vector<unsigned> &key) {
+   if (key.empty()) cout << "[empty key]" << endl;
+	cout << "Key=[";
+	for (unsigned i=0;i<key.size();++i)
+	  cout << key[i] << "::";
    cout << "]" << endl;
 }
-void Substraction::getKey(std::vector<Register*> keyRegs, unsigned key[KEYSIZE]) {
-	int count=0;
-	for (std::vector<Register*>::const_iterator iter=keyRegs.begin(),limit=keyRegs.end();iter!=limit&&count<KEYSIZE;++iter,++count)
+void Substraction::getKey(std::vector<Register*> keyRegs, std::vector<unsigned> &key) {
+	unsigned count=0;
+	while (key.size()<keySize)
+		key.push_back(0);
+	for (std::vector<Register*>::const_iterator iter=keyRegs.begin(),limit=keyRegs.end();iter!=limit&&count<key.size();++iter,++count)
 		key[count]=((*iter)->value);
-	for (;count<KEYSIZE;++count)
+	for (;count<keySize;++count)
 		key[count]=0;
 
 }
-bool Substraction::equalKeys(unsigned key1[KEYSIZE], unsigned key2[KEYSIZE]){
-	for (unsigned index=0;index<KEYSIZE;++index)
+bool Substraction::equalKeys(unsigned key1[], std::vector<unsigned> &key2){
+	for (unsigned index=0;index<key2.size()&&index<sizeof(key1);++index)
 		if (key1[index]!=key2[index]) {
-			//cout << "Different keys" << endl;
+			cout << "Different keys" << endl;
 			return false;
 		}
-	//cout << "equalKeys=true!" << endl;
+	cout << "equalKeys=true!" << endl;
 	return true;
 }
-bool Substraction::contains(unsigned key[KEYSIZE]){
+bool Substraction::contains(std::vector<unsigned> &key){
 	  unsigned hashTableSize=hashTable.size()/2;
 	  unsigned slot1=hash1(key,hashTableSize),slot2=hash2(key,hashTableSize);
+	  cout << "Hashvalues: " << slot1 << " " << slot2 << endl;
 	  Entry* e=hashTable[slot1];
 	  if ((!e)||(!equalKeys(e->key,key)))
 		 e=hashTable[slot2];
 	  if (e&&(equalKeys(e->key,key))) {
 		 for (Entry* iter=e;iter;iter=iter->next)
-			if (equalKeys(key,iter->key)) {
+			if (equalKeys(iter->key,key)) {
 			   // Tuple already in the table?
-			   //cout << "Key was found in hashtable" << endl;
+			   cout << "Key was found in hashtable" << endl;
 			   return true;
 			}
 	  }
-	  //cout << "Key was NOT found in hashtable" << endl;
+	  cout << "Key was NOT found in hashtable" << endl;
 	  return false;
 }
 //---------------------------------------------------------------------------
@@ -248,7 +270,7 @@ unsigned Substraction::first()
    cout << "leftTail.size()=" << leftTail.size() << endl;
 
    getKey(leftJoinKeys,leftKey);
-   //printKey(leftKey);
+   printKey(leftKey);
 
    //leftKey.push_back(leftValue->value);
    //for (unsigned index=0,limit=leftTail.size();index<limit;++index)
@@ -271,7 +293,7 @@ unsigned Substraction::next()
 			 return false;
 
 		  getKey(leftJoinKeys,leftKey);
-		  //printKey(leftKey);
+		  printKey(leftKey);
 
 		  found=contains(leftKey);
 
@@ -289,7 +311,7 @@ unsigned Substraction::next()
 
 		   found=contains(leftKey);
 
-		   //cout << "count=" << count << endl;
+		   cout << "count=" << count << endl;
 		   return count;
       }
 
