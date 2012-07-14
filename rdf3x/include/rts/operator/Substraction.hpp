@@ -1,6 +1,6 @@
 #ifndef H_rts_operator_Substraction
 #define H_rts_operator_Substraction
-#define KEYSIZE 2
+
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -28,11 +28,12 @@ class Substraction : public Operator
    struct Entry {
       /// The next entry
       Entry* next;
-      /// The key
-      //unsigned key;
-      unsigned key[KEYSIZE];
       /// The count
       unsigned count;
+      /// The composite key;
+      unsigned key[];
+
+
    };
    /// Hash table task
    class BuildHashTable : public Scheduler::AsyncPoint {
@@ -70,10 +71,16 @@ class Substraction : public Operator
    friend class ProbePeek;
 
 
-   void printKey(unsigned key[KEYSIZE]);
-   bool contains(unsigned key[KEYSIZE]);
-   void getKey(std::vector<Register*> keyRegs, unsigned key[KEYSIZE]);
-   bool equalKeys(unsigned key1[KEYSIZE],unsigned key2[KEYSIZE]);
+   // Hash functions with vector and array parameter
+   unsigned hash1(std::vector<unsigned> key,unsigned hashTableSize);
+   unsigned hash1(unsigned key[],unsigned hashTableSize);
+   unsigned hash2(std::vector<unsigned> key,unsigned hashTableSize);
+   unsigned hash2(unsigned key[],unsigned hashTableSize);
+
+   void printKey(std::vector<unsigned> &key);
+   bool contains(std::vector<unsigned> &key);
+   void getKey(std::vector<Register*> keyRegs, std::vector<unsigned> &key);
+   bool equalKeys(unsigned key1[],std::vector<unsigned> &key2);
    bool askForNext;
    bool found;
 
@@ -94,7 +101,9 @@ class Substraction : public Operator
    /// The tuple count from the right side
    unsigned leftCount;
    // Right key;
-   unsigned leftKey[KEYSIZE], rightKey[KEYSIZE];
+   std::vector<unsigned> leftKey, rightKey;
+   // Size of the key, i.e. number of join attributes
+   unsigned keySize;
    /// Task
    BuildHashTable buildHashTableTask;
    /// Task
@@ -105,7 +114,6 @@ class Substraction : public Operator
 
    /// Insert into the hash table
    void insert(Entry* e);
-
 
    public:
    /// Constructor
