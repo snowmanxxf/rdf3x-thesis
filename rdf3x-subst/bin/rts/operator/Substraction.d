@@ -1,0 +1,4 @@
+bin/rts/operator/Substraction.o: rts/operator/Substraction.cpp  include/infra/Config.hpp include/infra/osdep/Event.hpp include/infra/osdep/Mutex.hpp include/infra/util/Pool.hpp include/infra/util/VarPool.hpp include/rts/operator/Operator.hpp include/rts/operator/PlanPrinter.hpp include/rts/operator/Scheduler.hpp include/rts/operator/Substraction.hpp include/rts/runtime/DomainDescription.hpp include/rts/runtime/Runtime.hpp
+
+bin/rts/operator/Substraction.d: rts/operator/Substraction.cpp $(wildcard  include/infra/Config.hpp include/infra/osdep/Event.hpp include/infra/osdep/Mutex.hpp include/infra/util/Pool.hpp include/infra/util/VarPool.hpp include/rts/operator/Operator.hpp include/rts/operator/PlanPrinter.hpp include/rts/operator/Scheduler.hpp include/rts/operator/Substraction.hpp include/rts/runtime/DomainDescription.hpp include/rts/runtime/Runtime.hpp)
+
