@@ -102,6 +102,8 @@ class SPARQLParser
       std::vector<std::vector<PatternGroup> > unions;
       /// The substraction parts
       std::vector<std::vector<PatternGroup> > substractions;
+      /// The matchingss parts
+      std::vector<std::vector<PatternGroup> > matchings;
    };
    /// The projection modifier
    enum ProjectionModifier { Modifier_None, Modifier_Distinct, Modifier_Reduced, Modifier_Count, Modifier_Duplicates };

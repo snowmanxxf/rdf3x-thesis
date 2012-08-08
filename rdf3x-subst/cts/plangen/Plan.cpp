@@ -41,9 +41,11 @@ void Plan::print(unsigned indent) const
       case MergeJoin: cout << "MergeJoin"; break;
       case HashJoin: cout << "HashJoin"; break;
       case HashGroupify: cout << "HashGroupify"; break;
+      case HashEliminateDuplicates: cout << "HashEliminateDuplicates"; break;
       case Filter: cout << "Filter"; break;
       case Union: cout << "Union"; break;
       case Substraction: cout << "Substraction"; break;
+      case Matching: cout << "Matching"; break;
       case MergeUnion: cout << "MergeUnion"; break;
       case TableFunction: cout << "TableFunction"; break;
       case Singleton: cout << "Singleton"; break;
@@ -57,9 +59,11 @@ void Plan::print(unsigned indent) const
       case MergeJoin:
       case HashJoin: left->print(indent+1); right->print(indent+1); break;
       case HashGroupify:
+      case HashEliminateDuplicates:
       case Filter: left->print(indent+1); break;
       case Union:
       case Substraction:
+      case Matching:
       case MergeUnion: left->print(indent+1); right->print(indent+1); break;
       case TableFunction: left->print(indent+1); break;
       case Singleton: break;

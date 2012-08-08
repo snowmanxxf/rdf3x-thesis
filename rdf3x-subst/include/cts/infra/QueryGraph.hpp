@@ -104,6 +104,8 @@ class QueryGraph
       std::vector<std::vector<SubQuery> > unions;
       /// Substractions subqueries
       std::vector<std::vector<SubQuery> > substractions;
+      /// Matching subqueries
+      std::vector<std::vector<SubQuery> > matchings;
       /// The table functions
       std::vector<TableFunction> tableFunctions;
    };

@@ -56,6 +56,7 @@ HashGroupify::HashGroupify(Operator* input,const std::vector<Register*>& values,
    : Operator(expectedOutputCardinality),values(values),input(input),groups(0),groupsPool(values.size()*sizeof(unsigned))
    // Constructor
 {
+	countDuplicates = true;
 }
 //---------------------------------------------------------------------------
 HashGroupify::~HashGroupify()
@@ -140,13 +141,17 @@ unsigned HashGroupify::next()
    groupsIter=groupsIter->next;
 
    observedOutputCardinality+=count;
-   return count;
+   if (countDuplicates)
+	   return count;
+   else
+	   return 1;
 }
 //---------------------------------------------------------------------------
 void HashGroupify::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   out.beginOperator("HashGroupify",expectedOutputCardinality,observedOutputCardinality);
+   //out.beginOperator("HashGroupify",expectedOutputCardinality,observedOutputCardinality);
+   out.beginOperator("HashGroupify",values.size(),values.size());
    out.addMaterializationAnnotation(values);
    input->print(out);
    out.endOperator();

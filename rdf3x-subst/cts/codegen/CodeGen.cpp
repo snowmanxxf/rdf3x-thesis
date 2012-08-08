@@ -19,6 +19,7 @@
 #include "rts/operator/TableFunction.hpp"
 #include "rts/operator/Union.hpp"
 #include "rts/operator/Substraction.hpp"
+#include "rts/operator/Matching.hpp"
 #include "rts/runtime/Runtime.hpp"
 #include "rts/runtime/DifferentialIndex.hpp"
 #include <cstdlib>
@@ -151,12 +152,14 @@ static void collectVariables(const map<unsigned,Register*>& context,set<unsigned
       case Plan::MergeJoin:
       case Plan::HashJoin:
       case Plan::Substraction:
+      case Plan::Matching:
       case Plan::Union:
       case Plan::MergeUnion:
          collectVariables(context,variables,plan->left);
          collectVariables(context,variables,plan->right);
          break;
       case Plan::HashGroupify:
+      case Plan::HashEliminateDuplicates:
       case Plan::Filter:
          collectVariables(context,variables,plan->left);
          break;
@@ -349,6 +352,14 @@ static Operator* translateHashGroupify(Runtime& runtime,const map<unsigned,Regis
    return new HashGroupify(tree,output,plan->cardinality);
 }
 //---------------------------------------------------------------------------
+static Operator* translateHashEliminateDuplicates(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate a hash groupify into an operator tree
+{
+   HashGroupify* op = static_cast<HashGroupify*>(translateHashGroupify(runtime,context,projection,bindings,registers,plan));
+   op->countDuplicates = false;
+   return op;
+}
+//---------------------------------------------------------------------------
 static void collectVariables(set<unsigned>& filterVariables,const QueryGraph::Filter& filter)
    // Collect all query variables
 {
@@ -507,7 +518,8 @@ static Operator* translateSubstraction(Runtime& runtime,const map<unsigned,Regis
    map<unsigned,Register*> leftBindings,rightBindings;
    Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
    Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
-   mergeBindingsForSubstraction(projection,bindings,leftBindings);
+   //mergeBindingsForSubstraction(projection,bindings,leftBindings);
+   mergeBindings(projection,bindings,leftBindings,rightBindings);
 
    vector<Register*> leftKeys, rightKeys;
    for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
@@ -518,16 +530,52 @@ static Operator* translateSubstraction(Runtime& runtime,const map<unsigned,Regis
    // Prepare the tails
    vector<Register*> leftTail,rightTail;
    for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter) {
-	   bool add = true;
-	   for (set<unsigned>::const_iterator iter2=joinVariables.begin(),limit=joinVariables.end();iter2!=limit;++iter2)
-		   if ((*iter).first==(*iter2))
-			   add=false;
-       if (add)
+       if (joinVariables.count((*iter).first)==0)
     	   leftTail.push_back((*iter).second);
    }
 
    // Build the operator
    Operator* result=new Substraction(leftTree,leftKeys,leftTail,rightTree,rightKeys,-plan->left->costs,plan->right->costs,plan->cardinality);
+
+   return result;
+}
+//---------------------------------------------------------------------------
+static Operator* translateMatching(Runtime& runtime,const map<unsigned,Register*>& context,const set<unsigned>& projection,map<unsigned,Register*>& bindings,const map<const QueryGraph::Node*,unsigned>& registers,Plan* plan)
+   // Translate a hash join into an operator tree
+{
+   // Get the join variables (if any)
+   set<unsigned> joinVariables,newProjection=projection;
+   getJoinVariables(context,joinVariables,plan->left,plan->right);
+
+   newProjection.insert(joinVariables.begin(),joinVariables.end());
+   assert(!joinVariables.empty());
+
+   // Build the input trees
+   map<unsigned,Register*> leftBindings,rightBindings;
+   Operator* leftTree=translatePlan(runtime,context,newProjection,leftBindings,registers,plan->left);
+   Operator* rightTree=translatePlan(runtime,context,newProjection,rightBindings,registers,plan->right);
+   //mergeBindingsForSubstraction(projection,bindings,leftBindings);
+   mergeBindings(projection,bindings,leftBindings,rightBindings);
+
+   Register* match = new Register();
+   bindings[-1]=match;
+   //bindings.insert(pair<unsigned,Register*>(-1,match));
+
+   vector<Register*> leftKeys, rightKeys;
+   for (set<unsigned>::const_iterator iter=joinVariables.begin(),limit=joinVariables.end();iter!=limit;++iter) {
+	   leftKeys.push_back(leftBindings[*iter]);
+	   rightKeys.push_back(rightBindings[*iter]);
+   }
+
+   // Prepare the tails
+   vector<Register*> leftTail,rightTail;
+   for (map<unsigned,Register*>::const_iterator iter=leftBindings.begin(),limit=leftBindings.end();iter!=limit;++iter) {
+       if (joinVariables.count((*iter).first)==0)
+		   leftTail.push_back((*iter).second);
+   }
+
+   // Build the operator
+   Operator* result=new Matching(match,leftTree,leftKeys,leftTail,rightTree,rightKeys,plan->left->costs,plan->right->costs,plan->cardinality);
 
    return result;
 }
@@ -657,7 +705,9 @@ static Operator* translatePlan(Runtime& runtime,const map<unsigned,Register*>& c
       case Plan::MergeJoin: result=translateMergeJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::HashJoin: result=translateHashJoin(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Substraction: result=translateSubstraction(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::Matching: result=translateMatching(runtime,context,projection,bindings,registers,plan); break;
       case Plan::HashGroupify: result=translateHashGroupify(runtime,context,projection,bindings,registers,plan); break;
+      case Plan::HashEliminateDuplicates: result=translateHashEliminateDuplicates(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Filter: result=translateFilter(runtime,context,projection,bindings,registers,plan); break;
       case Plan::Union: result=translateUnion(runtime,context,projection,bindings,registers,plan); break;
       case Plan::MergeUnion: result=translateMergeUnion(runtime,context,projection,bindings,registers,plan); break;
@@ -687,6 +737,9 @@ static unsigned allocateRegisters(map<const QueryGraph::Node*,unsigned>& registe
       for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          id=allocateRegisters(registers,registerClasses,(*iter2),id);
    for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.substractions.begin(),limit=query.substractions.end();iter!=limit;++iter)
+      for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         id=allocateRegisters(registers,registerClasses,(*iter2),id);
+   for (vector<vector<QueryGraph::SubQuery> >::const_iterator iter=query.matchings.begin(),limit=query.matchings.end();iter!=limit;++iter)
       for (vector<QueryGraph::SubQuery>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          id=allocateRegisters(registers,registerClasses,(*iter2),id);
    for (vector<QueryGraph::TableFunction>::const_iterator iter=query.tableFunctions.begin(),limit=query.tableFunctions.end();iter!=limit;++iter) {

@@ -134,6 +134,10 @@ static bool binds(const SPARQLParser::PatternGroup& group,unsigned id)
       for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
          if (binds(*iter2,id))
             return true;
+   for (std::vector<std::vector<SPARQLParser::PatternGroup> >::const_iterator iter=group.matchings.begin(),limit=group.matchings.end();iter!=limit;++iter)
+      for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2)
+         if (binds(*iter2,id))
+            return true;
    return false;
 }
 //---------------------------------------------------------------------------
@@ -380,6 +384,22 @@ static bool transformSubquery(DictionarySegment& dict,DifferentialIndex* diffInd
       if (substractionParts.empty())
          return false;
       output.substractions.push_back(substractionParts);
+   }
+   // Encode all matching parts
+   for (std::vector<std::vector<SPARQLParser::PatternGroup> >::const_iterator iter=group.matchings.begin(),limit=group.matchings.end();iter!=limit;++iter) {
+      std::vector<QueryGraph::SubQuery> matchingParts;
+      for (std::vector<SPARQLParser::PatternGroup>::const_iterator iter2=(*iter).begin(),limit2=(*iter).end();iter2!=limit2;++iter2) {
+         QueryGraph::SubQuery subQuery;
+         if (!transformSubquery(dict,diffIndex,*iter2,subQuery)) {
+            // Known to produce an empty result, skip it
+            continue;
+         }
+         matchingParts.push_back(subQuery);
+      }
+      // Empty matching?
+      if (matchingParts.empty())
+         return false;
+      output.matchings.push_back(matchingParts);
    }
 
    return true;
