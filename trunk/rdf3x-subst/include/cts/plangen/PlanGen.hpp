@@ -61,6 +61,8 @@ class PlanGen
    /// Generate a substraction part
    Problem* buildSubstraction(const std::vector<QueryGraph::SubQuery>& query,unsigned id);
    /// Generate a table function access
+   Problem* buildMatching(const std::vector<QueryGraph::SubQuery>& query,unsigned id);
+   /// Generate a table function access
    Problem* buildTableFunction(const QueryGraph::TableFunction& function,unsigned id);
 
    /// Translate a query into an operator tree

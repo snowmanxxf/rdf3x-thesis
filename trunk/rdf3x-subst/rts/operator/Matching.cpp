@@ -1,4 +1,4 @@
-#include "rts/operator/Substraction.hpp"
+#include "rts/operator/Matching.hpp"
 #include "rts/operator/PlanPrinter.hpp"
 #include "rts/runtime/Runtime.hpp"
 //---------------------------------------------------------------------------
@@ -20,20 +20,20 @@ static inline unsigned singlehash2(unsigned key,unsigned hashTableSize) {
 	return hashTableSize+((key^(key>>3))&(hashTableSize-1));
 }
 //---------------------------------------------------------------------------
-unsigned Substraction::hash1(unsigned key[KEYSIZE],unsigned hashTableSize) {
+unsigned Matching::hash1(unsigned key[KEYSIZE],unsigned hashTableSize) {
 	unsigned newkey = 0;
 	for (unsigned i=0;i<keySize;++i)
 		newkey = (newkey<<1) + key[i];
 	return singlehash1(newkey,hashTableSize);
 }
-unsigned Substraction::hash2(unsigned key[KEYSIZE],unsigned hashTableSize) {
+unsigned Matching::hash2(unsigned key[KEYSIZE],unsigned hashTableSize) {
 	unsigned newkey = 1;
 	for (unsigned i=0;i<keySize;++i)
 		newkey = newkey * (key[i]^(key[i]>>3));
 	return singlehash2(newkey,hashTableSize);
 }
 //---------------------------------------------------------------------------
-void Substraction::BuildHashTable::run()
+void Matching::BuildHashTable::run()
    // Build the hash table
 {
    if (done) {
@@ -51,14 +51,11 @@ void Substraction::BuildHashTable::run()
    // Build the hash table from the right side
    unsigned hashTableSize = 1024;
    unsigned rightKey[KEYSIZE];
-   unsigned htSize = 0;
 
    join.hashTable.clear();
    join.hashTable.resize(2*hashTableSize);
    for (unsigned rightCount=join.right->first();rightCount;rightCount=join.right->next()) {
       // Check the domain first
-
-	   htSize++;
 
       for (unsigned index=0,limit=domainRegs.size();index<limit;++index) {
          /*if (!domainRegs[index]->domain->couldQualify(domainRegs[index]->value)) {
@@ -123,7 +120,7 @@ void Substraction::BuildHashTable::run()
    done=true;
 }
 //---------------------------------------------------------------------------
-void Substraction::ProbePeek::run()
+void Matching::ProbePeek::run()
    // Produce the first tuple from the probe side
 {
    if (done) return; // XXX support repeated executions under nested loop joins etc!
@@ -132,23 +129,23 @@ void Substraction::ProbePeek::run()
    done=true;
 }
 //---------------------------------------------------------------------------
-Substraction::Substraction(Operator* left,std::vector<Register*> leftJoinKeys,const std::vector<Register*>& leftTail,Operator* right,std::vector<Register*> rightJoinKeys,double hashPriority,double probePriority,double expectedOutputCardinality)
+Matching::Matching(Register* match,Operator* left,std::vector<Register*> leftJoinKeys,const std::vector<Register*>& leftTail,Operator* right,std::vector<Register*> rightJoinKeys,double hashPriority,double probePriority,double expectedOutputCardinality)
    : Operator(expectedOutputCardinality),left(left),right(right),
-     leftJoinKeys(leftJoinKeys),rightJoinKeys(rightJoinKeys),leftTail(leftTail),entryPool(leftTail.size()*sizeof(unsigned)),
+     leftJoinKeys(leftJoinKeys),rightJoinKeys(rightJoinKeys),match(match),leftTail(leftTail),entryPool(leftTail.size()*sizeof(unsigned)),
      buildHashTableTask(*this),probePeekTask(*this),hashPriority(hashPriority),probePriority(probePriority)
    // Constructor
 {
 	keySize = rightJoinKeys.size();
 }
 //---------------------------------------------------------------------------
-Substraction::~Substraction()
+Matching::~Matching()
    // Destructor
 {
    delete left;
    delete right;
 }
 //---------------------------------------------------------------------------
-void Substraction::insert(Entry* e)
+void Matching::insert(Entry* e)
    // Insert into the hash table
 {
    unsigned hashTableSize=hashTable.size()/2;
@@ -176,13 +173,13 @@ void Substraction::insert(Entry* e)
    insert(e);
 }
 //---------------------------------------------------------------------------
-void Substraction::printKey(unsigned key[KEYSIZE]) {
+void Matching::printKey(unsigned key[KEYSIZE]) {
    cout << "Key=[";
 	for (unsigned index=0;index<keySize;++index)
 	  cout << key[index] << "::";
    cout << "]" << endl;
 }
-void Substraction::getKey(std::vector<Register*> keyRegs, unsigned key[KEYSIZE]) {
+void Matching::getKey(std::vector<Register*> keyRegs, unsigned key[KEYSIZE]) {
 	unsigned count=0;
 	for (std::vector<Register*>::const_iterator iter=keyRegs.begin(),limit=keyRegs.end();iter!=limit&&count<keySize;++iter,++count)
 		key[count]=((*iter)->value);
@@ -190,14 +187,14 @@ void Substraction::getKey(std::vector<Register*> keyRegs, unsigned key[KEYSIZE])
 		key[count]=0;
 
 }
-bool Substraction::equalKeys(unsigned key1[KEYSIZE], unsigned key2[KEYSIZE]){
+bool Matching::equalKeys(unsigned key1[KEYSIZE], unsigned key2[KEYSIZE]){
 	for (unsigned index=0;index<keySize;++index)
 		if (key1[index]!=key2[index]) {
 			return false;
 		}
 	return true;
 }
-bool Substraction::contains(unsigned key[KEYSIZE]){
+bool Matching::contains(unsigned key[KEYSIZE]){
 	  unsigned hashTableSize=hashTable.size()/2;
 	  unsigned slot1=hash1(key,hashTableSize),slot2=hash2(key,hashTableSize);
 	  Entry* e=hashTable[slot1];
@@ -213,7 +210,7 @@ bool Substraction::contains(unsigned key[KEYSIZE]){
 	  return false;
 }
 //---------------------------------------------------------------------------
-unsigned Substraction::first()
+unsigned Matching::first()
    // Produce the first tuple
 {
    observedOutputCardinality=0;
@@ -234,7 +231,7 @@ unsigned Substraction::first()
    return next();
 }
 //---------------------------------------------------------------------------
-unsigned Substraction::next()
+unsigned Matching::next()
    // Produce the next tuple
 {
    while (true) {
@@ -248,17 +245,26 @@ unsigned Substraction::next()
 		  askForNext=true;
 	  }
       if (!found) {
+    	  //match->value = 0;
+    	  match->value = 3153797;
+		  observedOutputCardinality+=leftCount;
+		  return leftCount;
+      }
+      else {
+    	  //match->value = 1;
+    	  match->value = 3153800;
 		  observedOutputCardinality+=leftCount;
 		  return leftCount;
       }
 
+
    }
 }
 //---------------------------------------------------------------------------
-void Substraction::print(PlanPrinter& out)
+void Matching::print(PlanPrinter& out)
    // Print the operator tree. Debugging only.
 {
-   out.beginOperator("Substraction",expectedOutputCardinality,observedOutputCardinality);
+   out.beginOperator("Matching",expectedOutputCardinality,observedOutputCardinality);
    out.addEqualPredicateAnnotation(leftJoinKeys.front(),rightJoinKeys.front());
    out.addMaterializationAnnotation(leftTail);
    left->print(out);
@@ -266,13 +272,13 @@ void Substraction::print(PlanPrinter& out)
    out.endOperator();
 }
 //---------------------------------------------------------------------------
-void Substraction::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
+void Matching::addMergeHint(Register* /*reg1*/,Register* /*reg2*/)
    // Add a merge join hint
 {
    // Do not propagate as we break the pipeline
 }
 //---------------------------------------------------------------------------
-void Substraction::getAsyncInputCandidates(Scheduler& scheduler)
+void Matching::getAsyncInputCandidates(Scheduler& scheduler)
    // Register parts of the tree that can be executed asynchronous
 {
    unsigned p1=scheduler.getRegisteredPoints();

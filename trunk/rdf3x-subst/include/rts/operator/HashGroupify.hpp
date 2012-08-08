@@ -49,6 +49,9 @@ class HashGroupify : public Operator
    /// Destructor
    ~HashGroupify();
 
+   /// Sets whether next() returns number of duplicates or just 1 (useful for eliminating duplicates)
+   bool countDuplicates;
+
    /// Produce the first tuple
    unsigned first();
    /// Produce the next tuple

@@ -106,6 +106,10 @@ SPARQLParser::~SPARQLParser()
 unsigned SPARQLParser::nameVariable(const string& name)
    // Lookup or create a named variable
 {
+   //if (name=="match" || name=="MATCH") {
+   //	   namedVariables["match"]=-1;
+   //	   return -1;
+   //}
    if (namedVariables.count(name))
       return namedVariables[name];
 
@@ -155,8 +159,8 @@ void SPARQLParser::parseProjection()
       silent=false;
       if (token==SPARQLLexer::Identifier) {
     	 if (lexer.isKeyword("countdistinct")) {
-    		 projectionModifier=Modifier_Distinct;
     		 silent=true;
+    		 projectionModifier=Modifier_Distinct;
     	 }
     	 else
          if (lexer.isKeyword("distinct")) projectionModifier=Modifier_Distinct; else
@@ -874,6 +878,25 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
                    continue;
                 break;
              }
+         } else if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("match"))) {
+        	 projection.push_back(-1);
+        	 namedVariables["match"]=-1;
+             group.matchings.push_back(vector<PatternGroup>());
+             vector<PatternGroup>& currentmatchings=group.matchings.back();
+             currentmatchings.push_back(newGroup);
+             while (true) {
+                if (lexer.getNext()!=SPARQLLexer::LCurly)
+                   throw ParserException("'{' expected");
+                PatternGroup subGroup;
+                parseGroupGraphPattern(subGroup);
+                currentmatchings.push_back(subGroup);
+
+                // Another matchings?
+                token=lexer.getNext();
+                //if ((token==SPARQLLexer::Identifier)&&(lexer.isKeyword("match")))
+                //   continue;
+                break;
+             }
          } else {
             // No, simply merge it
             group.patterns.insert(group.patterns.end(),newGroup.patterns.begin(),newGroup.patterns.end());
@@ -881,6 +904,7 @@ void SPARQLParser::parseGroupGraphPattern(PatternGroup& group)
             group.optional.insert(group.optional.end(),newGroup.optional.begin(),newGroup.optional.end());
             group.unions.insert(group.unions.end(),newGroup.unions.begin(),newGroup.unions.end());
             group.substractions.insert(group.substractions.end(),newGroup.substractions.begin(),newGroup.substractions.end());
+            group.matchings.insert(group.matchings.end(),newGroup.matchings.begin(),newGroup.matchings.end());
          }
          if (token!=SPARQLLexer::Dot)
             lexer.unget(token);
@@ -1004,7 +1028,7 @@ void SPARQLParser::parse(bool multiQuery)
       throw ParserException("syntax error");
 
    // Fixup empty projections (i.e. *)
-   if (!projection.size()) {
+   if (!projection.size() || projection[0]==-1) {
       for (map<string,unsigned>::const_iterator iter=namedVariables.begin(),limit=namedVariables.end();iter!=limit;++iter)
          projection.push_back((*iter).second);
    }

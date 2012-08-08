@@ -158,7 +158,7 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
    // Construct the edges for a specfic subquery
 {
    // Collect all variable bindings
-   vector<set<unsigned> > patternBindings,optionalBindings,unionBindings,substractionBindings;
+   vector<set<unsigned> > patternBindings,optionalBindings,unionBindings,substractionBindings,matchingBindings;
    patternBindings.resize(subQuery.nodes.size());
    for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
       const QueryGraph::Node& n=subQuery.nodes[index];
@@ -192,11 +192,17 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
          constructEdges(*iter,substractionBindings[index]);
       bindings.insert(substractionBindings[index].begin(),substractionBindings[index].end());
    }
+   matchingBindings.resize(subQuery.matchings.size());
+   for (unsigned index=0,limit=matchingBindings.size();index<limit;++index) {
+      for (vector<QueryGraph::SubQuery>::iterator iter=subQuery.matchings[index].begin(),limit=subQuery.matchings[index].end();iter!=limit;++iter)
+         constructEdges(*iter,matchingBindings[index]);
+      bindings.insert(matchingBindings[index].begin(),matchingBindings[index].end());
+   }
 
 
    // Derive all edges
    subQuery.edges.clear();
-   unsigned optionalOfs=patternBindings.size(),unionOfs=optionalOfs+optionalBindings.size(),substractionOfs=unionOfs+unionBindings.size();
+   unsigned optionalOfs=patternBindings.size(),unionOfs=optionalOfs+optionalBindings.size(),substractionOfs=unionOfs+unionBindings.size(),matchingOfs=substractionOfs+substractionBindings.size();
    vector<unsigned> common;
    for (unsigned index=0,limit=patternBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
@@ -211,6 +217,9 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
       for (unsigned index2=0,limit2=substractionBindings.size();index2<limit2;index2++)
          if (intersects(patternBindings[index],substractionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(index,substractionOfs+index2,common));
+      for (unsigned index2=0,limit2=matchingBindings.size();index2<limit2;index2++)
+         if (intersects(patternBindings[index],matchingBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(index,matchingOfs+index2,common));
    }
    for (unsigned index=0,limit=optionalBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
@@ -222,6 +231,9 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
       for (unsigned index2=0,limit2=substractionBindings.size();index2<limit2;index2++)
          if (intersects(optionalBindings[index],substractionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(optionalOfs+index,substractionOfs+index2,common));
+      for (unsigned index2=0,limit2=matchingBindings.size();index2<limit2;index2++)
+         if (intersects(optionalBindings[index],matchingBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(optionalOfs+index,matchingOfs+index2,common));
    }
    for (unsigned index=0,limit=unionBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
@@ -230,11 +242,22 @@ static void constructEdges(QueryGraph::SubQuery& subQuery,set<unsigned>& binding
       for (unsigned index2=0,limit2=substractionBindings.size();index2<limit2;index2++)
          if (intersects(unionBindings[index],substractionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(unionOfs+index,substractionOfs+index2,common));
+      for (unsigned index2=0,limit2=matchingBindings.size();index2<limit2;index2++)
+         if (intersects(unionBindings[index],matchingBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(unionOfs+index,matchingOfs+index2,common));
    }
    for (unsigned index=0,limit=substractionBindings.size();index<limit;++index) {
       for (unsigned index2=index+1;index2<limit;index2++)
          if (intersects(substractionBindings[index],substractionBindings[index2],common))
             subQuery.edges.push_back(QueryGraph::Edge(substractionOfs+index,substractionOfs+index2,common));
+      for (unsigned index2=index+1;index2<limit;index2++)
+         if (intersects(matchingBindings[index],matchingBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(substractionOfs+index,matchingOfs+index2,common));
+   }
+   for (unsigned index=0,limit=matchingBindings.size();index<limit;++index) {
+      for (unsigned index2=index+1;index2<limit;index2++)
+         if (intersects(matchingBindings[index],matchingBindings[index2],common))
+            subQuery.edges.push_back(QueryGraph::Edge(matchingOfs+index,matchingOfs+index2,common));
    }
 }
 //---------------------------------------------------------------------------

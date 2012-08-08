@@ -5,6 +5,7 @@
 #include "rts/runtime/Runtime.hpp"
 #include "rts/segment/DictionarySegment.hpp"
 #include <algorithm>
+#include <iostream>
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2009 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -70,6 +71,11 @@ bool Sort::Sorter::operator()(const Tuple* a,const Tuple* b)
             if (subType1<subType2) return true;
             if (subType1>subType2) return false;
          }
+
+         // If both numberic compare numerically
+         if (type1==1 && type2==1)
+        	 return atof(start1)<atof(start2);
+
          int c=memcmp(start1,start2,min(stop1-start1,stop2-start2));
          if (c<0) return true;
          if (c>0) return false;

@@ -122,19 +122,19 @@ unsigned ResultsPrinter::firstForCount()
 unsigned ResultsPrinter::first()
    // Produce the first tuple
 {
-	if (silent) {
-	   unsigned count;
-	   unsigned entryCount=0;
-	   if ((count=input->first())!=0) {
-		   do {
-			   ++entryCount;
-		   }while ((count=input->next())!=0);
-	   }
+        if (silent) {
+           unsigned count;
+           unsigned entryCount=0;
+           if ((count=input->first())!=0) {
+                   do {
+                           ++entryCount;
+                   }while ((count=input->next())!=0);
+           }
 
-	   cout << entryCount << endl;
+           cout << entryCount << endl;
 
-	   return 1;
-	}
+           return 1;
+        }
 
    observedOutputCardinality=1;
 
