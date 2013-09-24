@@ -6,14 +6,15 @@
 #include <sstream>
 #include <cassert>
 #include <cstdlib>
-#ifdef __GNUC__
-#if (__GNUC__>4)||((__GNUC__==4)&&(__GNUC_MINOR__>=5))
-#define CONFIG_TR1
-#endif
-#endif
-#ifdef CONFIG_TR1
-#include <tr1/regex>
-#endif
+//#ifdef __GNUC__
+//#if (__GNUC__>4)||((__GNUC__==4)&&(__GNUC_MINOR__>=5))
+//#define CONFIG_TR1
+//#endif
+//#endif
+//#ifdef CONFIG_TR1
+#include <boost/regex.hpp>
+#include <boost/xpressive/regex_error.hpp>
+//#endif
 //---------------------------------------------------------------------------
 // RDF-3X
 // (c) 2008 Thomas Neumann. Web site: http://www.mpi-inf.mpg.de/~neumann/rdf3x
@@ -730,11 +731,11 @@ void Selection::BuiltinRegEx::eval(Result& result)
 
    try {
       pattern.ensureString(selection);
-      std::tr1::regex r(pattern.value.c_str());
+      boost::regex r(pattern.value.c_str());
       text.ensureString(selection);
-      result.setBoolean(std::tr1::regex_match(text.value.begin(),text.value.end(),r));
+      result.setBoolean(boost::regex_match(text.value.begin(),text.value.end(),r));
       return;
-   } catch (const std::tr1::regex_error&) {
+   } catch (const boost::xpressive::regex_error&) {
       result.setBoolean(false);
    }
 #else
